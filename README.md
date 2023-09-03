@@ -4,7 +4,7 @@ A [Zellij](https://zellij.dev) plugin for spawning floating command terminal pan
 Basically, it is an interactive version of `zrf` (`function zrf () { zellij run --name "$*" --floating -- zsh -ic "$*";}`).
 
 
-![Demo](https://github.com/vdbulcke/ghost/raw/main/img/demo.gif)
+![Demo](https://raw.githubusercontent.com/vdbulcke/ghost/main/img/ghost.gif)
 
 ## Requirements
 
