@@ -1,0 +1,13 @@
+[package]
+name = "ghost"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ansi_term = "0.12.1"
+zellij-tile = "0.38.1"
+owo-colors = "3.5.0"
+shellwords = "1.0.0"
+# sprintf = "0.1.3"
