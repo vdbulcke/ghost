@@ -12,11 +12,11 @@ Zellij version `v0.38.0` or later.
 
 ### Zellij Plugin Permission 
 
-| Permission               | Why                                |
-| -------------------------|------------------------------------|
-| `ReadApplicationState`   | Subcribe to Pane and tab events    |
-| `RunCommands`            | Creating Run Command floating pane | 
-| `ChangeApplicationState` | Setting plugin pane name           |
+| Permission               | Why                                 |
+| -------------------------|-------------------------------------|
+| `ReadApplicationState`   | Subscribe to Pane and tab events    |
+| `RunCommands`            | Creating Run Command floating pane  | 
+| `ChangeApplicationState` | Setting plugin pane name            |
 
 
 
@@ -61,12 +61,12 @@ Zellij version `v0.38.0` or later.
 ### Optional Configuration
 
 
-| Key              | value                   | desctiption                                           |
-|------------------|-------------------------|-------------------------------------------------------|
-| `cwd`            | direcotory path         | set working dir for command                           |
-| `embedded`       | `true`                  | created command pane are embedded instead of floating |
-| `ghost_launcher` | GhostLauncher pane name | pluging will automatically close that pane            |
-| `debug`          | `true`                  | display debug info                                    |
+| Key              | value                   | desctiption                                            |
+|------------------|-------------------------|--------------------------------------------------------|
+| `cwd`            | directory path          | set working dir for command                            |
+| `embedded`       | `true`                  | created command panes are embedded instead of floating |
+| `ghost_launcher` | GhostLauncher pane name | plugin will automatically close that pane              |
+| `debug`          | `true`                  | display debug info                                     |
 
 
 
