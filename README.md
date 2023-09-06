@@ -6,6 +6,11 @@ Basically, it is an interactive version of `zrf` (`function zrf () { zellij run 
 
 ![Demo](https://raw.githubusercontent.com/vdbulcke/ghost/main/img/ghost.gif)
 
+If the plugin finds a `.ghost` at the working of where you started your zellij session, it will load each lines as a list of commands that you can fuzzy search (using [fuzzy-matcher](https://crates.io/crates/fuzzy-matcher)).
+
+![Completion](./img/fuzzy_search.png)
+
+
 ## Requirements
 
 Zellij version `v0.38.0` or later.
@@ -18,7 +23,26 @@ Zellij version `v0.38.0` or later.
 | `RunCommands`            | Creating Run Command floating pane  | 
 | `ChangeApplicationState` | Setting plugin pane name            |
 
+### Host Filesystem Access
 
+[Zellij maps the folder where Zellij was started](https://zellij.dev/documentation/plugin-api-file-system) to `/host` path on the plugin (e.g. your home dir or `default_cwd` in your zellij or the current dir where you started your zellij session).
+
+The plugin will look for a `/host/.ghost` file (i.e. at the root of the dir of you current zellij session) to load a list of predefined commands (like a bash_history).
+
+
+Example of a `.ghost` file:
+```bash
+cargo build
+## this is a comment starting with '#'
+	# this is also a comment
+terraform apply
+
+
+
+## empty lines are also ignored
+go test -v ./...
+
+```
 
 
 ## Install
@@ -110,7 +134,7 @@ Verified OK
 zellij action launch-or-focus-plugin --floating --configuration "shell=zsh,shell_flag=-ic,cwd=$(pwd)" "file:$HOME/.config/zellij/plugins/ghost.wasm"
 ```
 
-## Keybinding
+## Config Keybindings
 
 > NOTE: The `LaunchOrFocusPlugin` keybing action does not allow to dynamically pass the cwd to the plugin. As a workaround, you can use the `Run` keybinding action to execute the `zellij action launch-or-focus-plugin` from a RunCommand pane where you can pass the plugin config `cwd=$(pwd)`. The cwd should be the same as the previously focused pane.
 
@@ -146,8 +170,15 @@ shared_except "locked" {
 }
 ```
 
+## Limitations
+
+### resizing
+
+UI column size is not handled, so resizing to plugin window too small may crash the plugin. 
+UI row size is partiallt handled, where it will minimize to a simple prompt if the plugin window becomes too small.
+
 
 ## Note
 
 This my first rust project, so the code might not be the most idiomatic rust.
-
+Inpiration was taken from other [zellij plugins](https://zellij.dev/documentation/plugin-examples).

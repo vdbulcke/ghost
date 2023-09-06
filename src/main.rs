@@ -1,7 +1,13 @@
 use ansi_term::{Colour::Fixed, Style};
+use fuzzy_matcher::FuzzyMatcher;
 use owo_colors::OwoColorize;
+use shellwords::MismatchedQuotes;
 use zellij_tile::prelude::*;
 
+use fuzzy_matcher::skim::SkimMatcherV2;
+use std::fs::File;
+use std::io::{self, BufRead};
+use std::path::Path;
 use std::{collections::BTreeMap, path::PathBuf};
 // use sprintf::sprintf;
 
@@ -10,8 +16,12 @@ struct State {
     launcher_pane_name: String,
     embedded: bool,
     launcher_pane_id: Option<u32>,
-    command: String,
+    input: String,
     userspace_configuration: BTreeMap<String, String>,
+    completion_enabled: bool,
+    completion: Vec<String>,
+    completion_match: Option<String>,
+    fz_matcher: SkimMatcherV2,
 }
 
 impl Default for State {
@@ -22,7 +32,11 @@ impl Default for State {
             userspace_configuration: BTreeMap::default(),
             focused_tab_pos: 0,
             embedded: false,
-            command: String::default(),
+            input: String::default(),
+            completion_enabled: false,
+            completion: Vec::default(),
+            completion_match: None,
+            fz_matcher: SkimMatcherV2::default(),
         }
     }
 }
@@ -56,6 +70,85 @@ impl State {
             close_terminal_pane(self.launcher_pane_id.unwrap());
         }
         close_plugin_pane(get_plugin_ids().plugin_id);
+    }
+
+    fn fuzzy_find_completion(&mut self) {
+        let mut best_score = 0;
+
+        // reset match
+        self.completion_match = None;
+        for l in self.completion.iter() {
+            if let Some(score) = self.fz_matcher.fuzzy_match(l, &self.input) {
+                if score > best_score {
+                    best_score = score;
+                    self.completion_match = Some(l.to_string());
+                }
+            }
+        }
+    }
+
+    fn check_valid_cmd(&self) -> Result<Vec<String>, MismatchedQuotes> {
+        if self.completion_enabled {
+            if let Some(cmd) = &self.completion_match {
+                return shellwords::split(cmd);
+            }
+        }
+        shellwords::split(&self.input)
+    }
+
+    /// Create a RunCommand pane with input_cmd if valid
+    fn run_command(&mut self, input_cmd: String) {
+        // get working dir from config
+        let plugin_cwd = self.userspace_configuration.get("cwd");
+        let cwd = match plugin_cwd {
+            Some(path) => {
+                let mut pb = PathBuf::new();
+                pb.push(path);
+                Some(pb)
+            }
+            _ => None,
+        };
+
+        // parse command + params and validate shell compliant
+        let command = match shellwords::split(&input_cmd) {
+            Ok(cmd) => Some(cmd),
+            Err(_) => None,
+        };
+
+        if let Some(_) = command {
+            // get the shell args from config
+            if let Some(shell) = self.userspace_configuration.get("shell") {
+                if let Some(shell_flag) = self.userspace_configuration.get("shell_flag") {
+                    // e.g. "zsh"
+                    let zsh_cmd = shell.to_string();
+                    let mut exec = PathBuf::new();
+                    exec.push(zsh_cmd);
+                    let mut zsh_args = Vec::new();
+                    // e.g. "-ic"
+                    zsh_args.push(shell_flag.to_owned());
+                    zsh_args.push(input_cmd.to_owned());
+
+                    if self.embedded {
+                        open_command_pane(CommandToRun {
+                            path: exec,
+                            args: zsh_args,
+                            cwd,
+                        });
+                    } else {
+                        open_command_pane_floating(CommandToRun {
+                            path: exec,
+                            args: zsh_args,
+                            cwd,
+                        });
+                    }
+                    if self.launcher_pane_id.is_some() {
+                        close_terminal_pane(self.launcher_pane_id.unwrap());
+                    }
+                    self.input = String::default();
+                    close_plugin_pane(get_plugin_ids().plugin_id);
+                }
+            }
+        }
     }
 }
 
@@ -92,6 +185,27 @@ impl ZellijPlugin for State {
             EventType::PaneUpdate,
             EventType::Key,
         ]);
+
+        // File .ghost must exist in the current path (zellij cwd dir is mounted as /host)
+        // NOTE: /host is the cwd of where the zellij session started
+        //       and not the current cwd of the pane itself
+        let filename = "/host/.ghost".to_owned();
+        if let Ok(lines) = read_lines(filename) {
+            // Consumes the iterator, returns an (Optional) String
+            for line in lines {
+                if let Ok(cmd) = line {
+                    // ignore commented lines starting with '#'
+                    // or empty line
+                    if !cmd.trim_start().starts_with("#") && !cmd.trim_start().is_empty() {
+                        if !self.completion_enabled {
+                            self.completion_enabled = true;
+                        }
+                        self.completion.push(cmd);
+                    }
+                }
+            }
+        }
+
         rename_plugin_pane(get_plugin_ids().plugin_id, "Ghost");
     }
 
@@ -116,99 +230,155 @@ impl ZellijPlugin for State {
                 should_render = true;
             }
             Event::Key(Key::Char('\n')) => {
-                // get working dir from config
-                let plugin_cwd = self.userspace_configuration.get("cwd");
-                let cwd = match plugin_cwd {
-                    Some(path) => {
-                        let mut pb = PathBuf::new();
-                        pb.push(path);
-                        Some(pb)
+                if self.completion_enabled {
+                    if let Some(cmd) = &self.completion_match {
+                        // run completion match
+                        self.run_command(cmd.to_owned());
                     }
-                    _ => None,
-                };
-
-                // parse command + params and validate shell compliant
-                let command = match shellwords::split(self.command.as_str()) {
-                    Ok(cmd) => Some(cmd),
-                    Err(_) => None,
-                };
-
-                if let Some(_) = command {
-                    // get the shell args from config
-                    if let Some(shell) = self.userspace_configuration.get("shell") {
-                        if let Some(shell_flag) = self.userspace_configuration.get("shell_flag") {
-                            // }
-                            // if shell.is_some() && shell_flag.is_some() {
-                            // e.g. "zsh"
-                            let zsh_cmd = shell.to_string();
-                            let mut exec = PathBuf::new();
-                            exec.push(zsh_cmd);
-                            let mut zsh_args = Vec::new();
-                            // e.g. "-ic"
-                            zsh_args.push(shell_flag.to_owned());
-                            zsh_args.push(self.command.to_owned());
-
-                            if self.embedded {
-                                open_command_pane(CommandToRun {
-                                    path: exec,
-                                    args: zsh_args,
-                                    cwd,
-                                });
-                            } else {
-                                open_command_pane_floating(CommandToRun {
-                                    path: exec,
-                                    args: zsh_args,
-                                    cwd,
-                                });
-                            }
-                            self.command = String::default();
-                            if self.launcher_pane_id.is_some() {
-                                close_terminal_pane(self.launcher_pane_id.unwrap());
-                            }
-                            self.command = String::default();
-                            close_plugin_pane(get_plugin_ids().plugin_id);
-                        }
-                    }
+                } else {
+                    // if completion disable run intput as command
+                    self.run_command(self.input.to_owned());
                 }
             }
             Event::Key(Key::Backspace) => {
-                self.command.pop();
-
+                self.input.pop();
+                self.fuzzy_find_completion();
                 should_render = true;
             }
             Event::Key(Key::Char(c)) => {
-                self.command.push(c);
+                self.input.push(c);
 
+                self.fuzzy_find_completion();
                 should_render = true;
             }
             Event::Key(Key::Esc | Key::Ctrl('c')) => {
                 self.close();
                 should_render = true;
             }
-            // Event::Key(Key::Ctrl('x')) => {
-            //     if self.launcher_pane_id.is_some() {
-            //         close_terminal_pane(self.launcher_pane_id.unwrap());
-            //     }
-            //     should_render = true;
-            // }
+            Event::Key(Key::Ctrl('x')) => {
+                self.completion_enabled = !self.completion_enabled;
+                should_render = true;
+            }
             _ => (),
         };
 
         should_render
     }
 
-    fn render(&mut self, _rows: usize, _cols: usize) {
-        println!("");
-        println!(
-            "{} {}",
-            " > ".cyan().bold(),
-            if self.command.is_empty() {
-                "Type command to run".dimmed().italic().to_string()
-            } else {
-                self.command.dimmed().italic().to_string()
+    fn render(&mut self, rows: usize, _cols: usize) {
+        // get the shell args from config
+        if self.userspace_configuration.get("shell").is_none() {
+            if self.userspace_configuration.get("shell_flag").is_none() {
+                println!("{}", color_bold(RED, "Error 'shell' (zsh|fish|bash)  and 'shell_flag' (e.g '-ic') are required configuration"));
+                return;
             }
-        );
+        }
+        let mut prompt = " $ ".cyan().bold().to_string();
 
+        if rows < 10 {
+            // disable competion
+            self.completion_enabled = false;
+        }
+
+        // if not enough space in UI
+        if rows < 5 {
+            // disable competion
+            self.completion_enabled = false;
+            // input prompt
+            if self.input.is_empty() {
+                println!(
+                    "{} {}{}",
+                    prompt,
+                    "┃".bold().white(),
+                    "Type command to run".dimmed().italic().to_string(),
+                );
+            } else {
+                println!(
+                    "{} {}{}",
+                    prompt,
+                    self.input.dimmed().to_string(),
+                    "┃".bold().white(),
+                );
+            }
+            return; // no more UI
+        }
+
+        let debug = self.userspace_configuration.get("debug");
+        // count keep tracks of lines printed
+        // 4 lines for CWD and keybinding views
+        let mut count = 4;
+
+        // validation info
+        let res = self.check_valid_cmd();
+        match res {
+            Ok(_) => {
+                println!("");
+            }
+            Err(_) => println!("{}", color_bold(RED, "Invalid Command")),
+        }
+        count += 1;
+
+        // input prompt
+        if self.completion_enabled {
+            prompt = " > ".cyan().bold().to_string();
+        }
+        if self.input.is_empty() {
+            if self.completion_enabled {
+                println!(
+                    "{} {}{}",
+                    prompt,
+                    "┃".bold().white(),
+                    "Fuzzy find command".dimmed().italic().to_string(),
+                );
+            } else {
+                println!(
+                    "{} {}{}",
+                    prompt,
+                    "┃".bold().white(),
+                    "Type command to run".dimmed().italic().to_string(),
+                );
+            }
+        } else {
+            println!(
+                "{} {}{}",
+                prompt,
+                self.input.dimmed().to_string(),
+                "┃".bold().white(),
+            );
+        }
+        count += 1;
+
+        // completion fuzzy finder
+        if self.completion_enabled {
+            if let Some(m) = &self.completion_match {
+                println!(" $ {}", m);
+                println!("");
+
+                count += 2;
+            } else {
+                println!(" $ {}", "Matched command".dimmed().to_string());
+                println!("");
+                count += 2;
+            }
+            println!(" Available completion: ");
+
+            count += 1;
+            for l in self.completion.iter() {
+                if let Some(_) = self.fz_matcher.fuzzy_match(l, &self.input) {
+                    // limits display of completion
+                    // based on available rows in pane
+                    // with arbitrary buffer for safety
+                    if count >= rows - 4 {
+                        println!(" - {}", "...".dimmed().to_string());
+                        break;
+                    }
+                    println!(" - {}", l.dimmed().to_string());
+                    count += 1;
+                }
+            }
+        }
+
+        // current dir view
         if let Some(plugin_cwd) = self.userspace_configuration.get("cwd") {
             println!("");
             println!(
@@ -218,29 +388,15 @@ impl ZellijPlugin for State {
             );
         }
 
-        // get the shell args from config
-        if self.userspace_configuration.get("shell").is_none() {
-            if self.userspace_configuration.get("shell_flag").is_none() {
-                println!("{}", color_bold(RED, "Error 'shell' (zsh|fish|bash)  and 'shell_flag' (e.g '-ic') are required configuration"));
-            }
-        }
-        let debug = self.userspace_configuration.get("debug");
+        // Key binding view
+        println!("");
+        println!(
+            "  <{}> <{}> Close Plugin <{}> Toggle Completion on/off",
+            color_bold(WHITE, "Esc"),
+            color_bold(WHITE, "Ctrl+c"),
+            color_bold(WHITE, "Ctrl x"),
+        );
 
-        let res = shellwords::split(self.command.as_str());
-        match res {
-            Ok(p) => {
-                let cmd = p.first();
-
-                if debug.is_some_and(|x| x == "true") {
-                    println!("{}", color_bold(GREEN, "Parsed Command"));
-                    if cmd.is_some() {
-                        println!("cmd: {}", p.first().unwrap());
-                    }
-                    println!("param: {:#?}", p);
-                }
-            }
-            Err(_) => println!("{}", color_bold(RED, "Invalid Command")),
-        }
         if debug.is_some_and(|x| x == "true") {
             println!(
                 "{} {:#?}",
@@ -248,12 +404,12 @@ impl ZellijPlugin for State {
                 self.userspace_configuration
             );
         }
-        println!("");
-        println!(
-            "  <{}> <{}> Close Plugin ",
-            color_bold(WHITE, "Esc"),
-            color_bold(WHITE, "Ctrl+c"),
-        );
+
+        if debug.is_some_and(|x| x == "true") && !self.completion.is_empty() {
+            for l in self.completion.iter() {
+                println!(" - {}", l.dimmed().to_string());
+            }
+        }
     }
 }
 
@@ -268,4 +424,15 @@ pub const ORANGE: u8 = 166;
 
 fn color_bold(color: u8, text: &str) -> String {
     format!("{}", Style::new().fg(Fixed(color)).bold().paint(text))
+}
+
+// src: https://doc.rust-lang.org/rust-by-example/std_misc/file/read_lines.html
+// The output is wrapped in a Result to allow matching on errors
+// Returns an Iterator to the Reader of the lines of the file.
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+where
+    P: AsRef<Path>,
+{
+    let file = File::open(filename)?;
+    Ok(io::BufReader::new(file).lines())
 }

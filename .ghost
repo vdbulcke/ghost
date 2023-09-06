@@ -1,0 +1,11 @@
+cargo build
+## this is a comment starting with '#'
+	# this is also a comment
+terraform apply
+
+
+
+## empty lines are also ignored
+go test -v ./...
+
+

@@ -6,18 +6,18 @@ layout {
         pane 
         pane {
             pane stacked=true {
-                pane size="10%" command="bash" name="COMPILE AND RELOAD PLUGIN" {
-                    args "-c" "cargo build && zellij action start-or-reload-plugin --floating --configuration \"shell=zsh,shell_flag=-ic,cwd=$(pwd),ghost_launcher=GhostLauncher,debug=true\" file:target/wasm32-wasi/debug/ghost.wasm"
-                }
-                pane expanded=true {
+                // pane size="10%" command="bash" name="COMPILE AND RELOAD PLUGIN" {
+                //     args "-c" "cargo build && zellij action start-or-reload-plugin --floating --configuration \"shell=zsh,shell_flag=-ic,cwd=$(pwd),ghost_launcher=GhostLauncher,debug=true\" file:target/wasm32-wasi/debug/ghost.wasm"
+                // }
+                pane  {
                     plugin location="file:target/wasm32-wasi/debug/ghost.wasm" {
                         floating true
                         shell "zsh"
                         shell_flag "-ic"
 
                         ghost_launcher "GhostLauncher"
-                        debug true
-                        embedded true
+                        debug false
+                        // embedded true
                         
                     }
                 }

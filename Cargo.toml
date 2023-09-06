@@ -10,4 +10,6 @@ ansi_term = "0.12.1"
 zellij-tile = "0.38.1"
 owo-colors = "3.5.0"
 shellwords = "1.0.0"
+fuzzy-matcher = "0.3.7"
 # sprintf = "0.1.3"
+
