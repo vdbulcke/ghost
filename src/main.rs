@@ -17,6 +17,7 @@ struct State {
     embedded: bool,
     launcher_pane_id: Option<u32>,
     input: String,
+    input_cusror_index: usize,
     userspace_configuration: BTreeMap<String, String>,
     completion_enabled: bool,
     completion: Vec<String>,
@@ -33,6 +34,7 @@ impl Default for State {
             focused_tab_pos: 0,
             embedded: false,
             input: String::default(),
+            input_cusror_index: 0,
             completion_enabled: false,
             completion: Vec::default(),
             completion_match: None,
@@ -84,6 +86,97 @@ impl State {
                     self.completion_match = Some(l.to_string());
                 }
             }
+        }
+    }
+
+    /// remove_input_at_index  removes char at the
+    /// cursor index and update input.
+    /// Returns true if the input has change
+    fn remove_input_at_index(&mut self) -> bool {
+        if self.input.is_empty() {
+            self.input.pop();
+        } else if self.input_cusror_index > 0 && self.input_cusror_index <= self.input.len() {
+            self.input.remove(self.input_cusror_index - 1);
+            // update cursor index
+            self.input_cusror_index -= 1;
+
+            return true;
+        } else if self.input_cusror_index == 0 {
+            self.input.remove(0);
+        }
+        return false;
+    }
+
+    /// remove_input_at_index  removes char at the
+    /// cursor index and update input.
+    /// Returns true if the input has change
+    fn insert_input_at_index(&mut self, c: char) -> bool {
+        if self.input.is_empty() {
+            self.input.push(c);
+
+            // update cursor index
+            self.input_cusror_index += 1;
+        } else if self.input_cusror_index > 0 && self.input_cusror_index <= self.input.len() {
+            self.input.insert(self.input_cusror_index, c);
+            // update cursor index
+            self.input_cusror_index += 1;
+
+            return true;
+        } else if self.input_cusror_index == 0 {
+            self.input.insert(0, c);
+            self.input_cusror_index += 1;
+        }
+        return false;
+    }
+
+    /// print the input prompt
+    fn print_prompt(&self, _rows: usize, _cols: usize) {
+        let mut prompt = " $ ".cyan().bold().to_string();
+        // if not enough space in UI
+        // input prompt
+        if self.completion_enabled {
+            prompt = " > ".cyan().bold().to_string();
+        }
+        if self.input.is_empty() {
+            if self.completion_enabled {
+                println!(
+                    "{} {}{}",
+                    prompt,
+                    "┃".bold().white(),
+                    "Fuzzy find command".dimmed().italic().to_string(),
+                );
+            } else {
+                println!(
+                    "{} {}{}",
+                    prompt,
+                    "┃".bold().white(),
+                    "Type command to run".dimmed().italic().to_string(),
+                );
+            }
+        } else {
+            self.print_non_empty_input_prompt(prompt);
+        }
+    }
+
+    fn print_non_empty_input_prompt(&self, prompt: String) {
+        if self.input_cusror_index == self.input.len() {
+            println!(
+                "{} {}{}",
+                prompt,
+                self.input.dimmed().to_string(),
+                "┃".bold().white(),
+            );
+        } else if self.input_cusror_index < self.input.len() {
+            let copy = self.input.clone();
+            let (before_curs, after_curs) = copy.split_at(self.input_cusror_index);
+
+            println!(
+                "{} {}{}{}",
+                prompt,
+                before_curs.dimmed().to_string(),
+                "┃".bold().white(),
+                after_curs.dimmed().to_string()
+            );
         }
     }
 
@@ -241,14 +334,28 @@ impl ZellijPlugin for State {
                 }
             }
             Event::Key(Key::Backspace) => {
-                self.input.pop();
-                self.fuzzy_find_completion();
+                if self.remove_input_at_index() {
+                    // update fuzzy find result
+                    self.fuzzy_find_completion();
+                }
                 should_render = true;
             }
             Event::Key(Key::Char(c)) => {
-                self.input.push(c);
-
-                self.fuzzy_find_completion();
+                if self.insert_input_at_index(c) {
+                    self.fuzzy_find_completion();
+                }
+                should_render = true;
+            }
+            Event::Key(Key::Left) => {
+                if self.input_cusror_index > 0 {
+                    self.input_cusror_index -= 1;
+                }
+                should_render = true;
+            }
+            Event::Key(Key::Right) => {
+                if self.input_cusror_index < self.input.len() {
+                    self.input_cusror_index += 1;
+                }
                 should_render = true;
             }
             Event::Key(Key::Esc | Key::Ctrl('c')) => {
@@ -265,7 +372,7 @@ impl ZellijPlugin for State {
         should_render
     }
 
-    fn render(&mut self, rows: usize, _cols: usize) {
+    fn render(&mut self, rows: usize, cols: usize) {
         // get the shell args from config
         if self.userspace_configuration.get("shell").is_none() {
             if self.userspace_configuration.get("shell_flag").is_none() {
@@ -273,42 +380,13 @@ impl ZellijPlugin for State {
                 return;
             }
         }
-        let mut prompt = " $ ".cyan().bold().to_string();
-
-        if rows < 10 {
-            // disable competion
-            self.completion_enabled = false;
-        }
-
-        // if not enough space in UI
-        if rows < 5 {
-            // disable competion
-            self.completion_enabled = false;
-            // input prompt
-            if self.input.is_empty() {
-                println!(
-                    "{} {}{}",
-                    prompt,
-                    "┃".bold().white(),
-                    "Type command to run".dimmed().italic().to_string(),
-                );
-            } else {
-                println!(
-                    "{} {}{}",
-                    prompt,
-                    self.input.dimmed().to_string(),
-                    "┃".bold().white(),
-                );
-            }
-            return; // no more UI
-        }
 
         let debug = self.userspace_configuration.get("debug");
         // count keep tracks of lines printed
         // 4 lines for CWD and keybinding views
         let mut count = 4;
 
-        // validation info
+        // validation info view
         let res = self.check_valid_cmd();
         match res {
             Ok(_) => {
@@ -318,34 +396,19 @@ impl ZellijPlugin for State {
         }
         count += 1;
 
-        // input prompt
-        if self.completion_enabled {
-            prompt = " > ".cyan().bold().to_string();
+        // prompt view
+        if rows < 5 {
+            // disable competion
+            self.completion_enabled = false;
+            self.print_prompt(rows, cols);
+            return; // no more UI
         }
-        if self.input.is_empty() {
-            if self.completion_enabled {
-                println!(
-                    "{} {}{}",
-                    prompt,
-                    "┃".bold().white(),
-                    "Fuzzy find command".dimmed().italic().to_string(),
-                );
-            } else {
-                println!(
-                    "{} {}{}",
-                    prompt,
-                    "┃".bold().white(),
-                    "Type command to run".dimmed().italic().to_string(),
-                );
-            }
-        } else {
-            println!(
-                "{} {}{}",
-                prompt,
-                self.input.dimmed().to_string(),
-                "┃".bold().white(),
-            );
+        if rows < 10 {
+            // disable competion
+            self.completion_enabled = false;
         }
+
+        self.print_prompt(rows, cols);
         count += 1;
 
         // completion fuzzy finder
@@ -398,17 +461,16 @@ impl ZellijPlugin for State {
         );
 
         if debug.is_some_and(|x| x == "true") {
+            println!("input: {}", self.input.to_string());
+
+            println!("Cursor: {}", self.input_cusror_index);
+            println!("len: {}", self.input.len());
+
             println!(
                 "{} {:#?}",
                 color_bold(GREEN, "Runtime configuration:"),
                 self.userspace_configuration
             );
-        }
-
-        if debug.is_some_and(|x| x == "true") && !self.completion.is_empty() {
-            for l in self.completion.iter() {
-                println!(" - {}", l.dimmed().to_string());
-            }
         }
     }
 }
