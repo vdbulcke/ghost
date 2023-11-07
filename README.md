@@ -6,7 +6,10 @@ Basically, it is an interactive version of `zrf` (`function zrf () { zellij run 
 
 ![Demo](https://raw.githubusercontent.com/vdbulcke/ghost/main/img/ghost.gif)
 
-If the plugin finds a `.ghost` at the working of where you started your zellij session, it will load each lines as a list of commands that you can fuzzy search (using [fuzzy-matcher](https://crates.io/crates/fuzzy-matcher)).
+
+Since `v0.3.0`, if you define a list of completions from `global_completion` plugin configuration, it will load each lines as a list of commands that you can fuzzy search (using [fuzzy-matcher](https://crates.io/crates/fuzzy-matcher)).
+
+If the plugin finds a `.ghost` at the working dir of the plugin, it will add the working dir completions with the global_completions.
 
 ![Completion](./img/fuzzy_search.png)
 
@@ -25,9 +28,11 @@ Zellij version `v0.38.0` or later.
 
 ### Host Filesystem Access
 
-[Zellij maps the folder where Zellij was started](https://zellij.dev/documentation/plugin-api-file-system) to `/host` path on the plugin (e.g. your home dir or `default_cwd` in your zellij or the current dir where you started your zellij session).
+> NOTE: zellij `v0.39.0` changed the `/host` path on plugin from the current zellij session working dir to the previous pane working dir (see [Release Notes](https://github.com/zellij-org/zellij/releases/tag/v0.39.0) for more info)
 
-The plugin will look for a `/host/.ghost` file (i.e. at the root of the dir of you current zellij session) to load a list of predefined commands (like a bash_history).
+[Zellij maps the folder where Zellij was started](https://zellij.dev/documentation/plugin-api-file-system) to `/host` path on the plugin.
+
+The plugin will look for a `/host/.ghost` file (i.e. the current working of the previous focussed pane) to load a list of predefined commands (like a bash_history).
 
 
 Example of a `.ghost` file:
@@ -118,12 +123,13 @@ Verified OK
 ### Optional Configuration
 
 
-| Key              | value                   | desctiption                                            |
-|------------------|-------------------------|--------------------------------------------------------|
-| `cwd`            | directory path          | set working dir for command                            |
-| `embedded`       | `true`                  | created command panes are embedded instead of floating |
-| `ghost_launcher` | GhostLauncher pane name | plugin will automatically close that pane              |
-| `debug`          | `true`                  | display debug info                                     |
+| Key                 | value                      | desctiption                                                |
+|---------------------|----------------------------|------------------------------------------------------------|
+| `cwd`               | directory path             | set working dir for command                                |
+| `embedded`          | `true`                     | created command panes are embedded instead of floating     |
+| `ghost_launcher`    | GhostLauncher pane name    | plugin will automatically close that pane                  |
+| `debug`             | `true`                     | display debug info                                         |
+| `global_completion` | multine list of completion | global list of completion to inlude to `/host/.ghost` file |
 
 
 
@@ -154,13 +160,22 @@ shared_except "locked" {
             // ghost_launcher "GhostLauncher" // name of the Ghost launcher pane (default GhostLauncher)
             // debug false                    // display debug info, config, parse command etc
             // embedded false                 // spawned command pane will be embedded instead of floating pane
+
+
+            // NOTE: using 'r#"' and '"#' rust like multi string delimeter
+            global_completion r#"
+                tf apply -auto-approve
+                cargo build
+                go test -v  ./...
+                
+            "#
         }
     }
 
     // using GhostLauncher "hack" to pass the cwd=$(pwd) as runtime config 
     bind "Alt )" {
-         // this 
-         Run "bash" "-ic" "zellij action launch-or-focus-plugin --floating --configuration \"shell=zsh,shell_flag=-ic,cwd=$(pwd),ghost_launcher=GhostLauncher,debug=false\" \"file:$HOME/.config/zellij/plugins/ghost.wasm\"" {
+         // NOTE: you can pass the global_completion as runtim config with the '\n' delimiter between commands
+         Run "bash" "-ic" "zellij action launch-or-focus-plugin --floating --configuration \"shell=zsh,shell_flag=-ic,cwd=$(pwd),ghost_launcher=GhostLauncher,debug=false,global_competion=tf apply -auto-approve \ncargo build \ngo test -v  ./...\" \"file:$HOME/.config/zellij/plugins/ghost.wasm\"" {
             floating true
             name "GhostLauncher" // this must match ghost_launcher=GhostLauncher 
                                  // the plugin will automatically close the pane

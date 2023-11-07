@@ -46,7 +46,7 @@ impl Default for State {
 fn get_focused_tab(tab_infos: &Vec<TabInfo>) -> Option<usize> {
     for t in tab_infos {
         if t.active {
-            return Some(t.position.clone());
+            return Some(t.position);
         }
     }
     None
@@ -59,7 +59,7 @@ impl State {
         if let Some(panes) = panes {
             for pane in panes {
                 if !pane.is_plugin && pane.title == self.launcher_pane_name {
-                    return Some(pane.id.clone());
+                    return Some(pane.id);
                 }
             }
         }
@@ -104,7 +104,7 @@ impl State {
         } else if self.input_cusror_index == 0 {
             self.input.remove(0);
         }
-        return false;
+        false
     }
 
     /// remove_input_at_index  removes char at the
@@ -126,7 +126,7 @@ impl State {
             self.input.insert(0, c);
             self.input_cusror_index += 1;
         }
-        return false;
+        false
     }
 
     /// print the input prompt
@@ -143,14 +143,14 @@ impl State {
                     "{} {}{}",
                     prompt,
                     "┃".bold().white(),
-                    "Fuzzy find command".dimmed().italic().to_string(),
+                    "Fuzzy find command".dimmed().italic(),
                 );
             } else {
                 println!(
                     "{} {}{}",
                     prompt,
                     "┃".bold().white(),
-                    "Type command to run".dimmed().italic().to_string(),
+                    "Type command to run".dimmed().italic(),
                 );
             }
         } else {
@@ -159,24 +159,24 @@ impl State {
     }
 
     fn print_non_empty_input_prompt(&self, prompt: String) {
-        if self.input_cusror_index == self.input.len() {
-            println!(
-                "{} {}{}",
-                prompt,
-                self.input.dimmed().to_string(),
-                "┃".bold().white(),
-            );
-        } else if self.input_cusror_index < self.input.len() {
-            let copy = self.input.clone();
-            let (before_curs, after_curs) = copy.split_at(self.input_cusror_index);
+        match self.input_cusror_index.cmp(&self.input.len()) {
+            std::cmp::Ordering::Equal => {
+                println!("{} {}{}", prompt, self.input.dimmed(), "┃".bold().white(),);
+            }
+            std::cmp::Ordering::Less => {
+                let copy = self.input.clone();
+                let (before_curs, after_curs) = copy.split_at(self.input_cusror_index);
 
-            println!(
-                "{} {}{}{}",
-                prompt,
-                before_curs.dimmed().to_string(),
-                "┃".bold().white(),
-                after_curs.dimmed().to_string()
-            );
+                println!(
+                    "{} {}{}{}",
+                    prompt,
+                    before_curs.dimmed(),
+                    "┃".bold().white(),
+                    after_curs.dimmed()
+                );
+            }
+
+            std::cmp::Ordering::Greater => (),
         }
     }
 
@@ -208,7 +208,7 @@ impl State {
             Err(_) => None,
         };
 
-        if let Some(_) = command {
+        if command.is_some() {
             // get the shell args from config
             if let Some(shell) = self.userspace_configuration.get("shell") {
                 if let Some(shell_flag) = self.userspace_configuration.get("shell_flag") {
@@ -216,11 +216,8 @@ impl State {
                     let zsh_cmd = shell.to_string();
                     let mut exec = PathBuf::new();
                     exec.push(zsh_cmd);
-                    let mut zsh_args = Vec::new();
-                    // e.g. "-ic"
-                    zsh_args.push(shell_flag.to_owned());
-                    zsh_args.push(input_cmd.to_owned());
-
+                    // // e.g. "-ic"
+                    let zsh_args = vec![shell_flag.to_owned(), input_cmd.to_owned()];
                     if self.embedded {
                         open_command_pane(CommandToRun {
                             path: exec,
@@ -279,22 +276,33 @@ impl ZellijPlugin for State {
             EventType::Key,
         ]);
 
+        if let Some(global_completions) = self.userspace_configuration.get("global_completion") {
+            for line in global_completions.lines() {
+                // ignore commented lines starting with '#'
+                // or empty line
+                if !line.trim_start().starts_with('#') && !line.trim_start().is_empty() {
+                    if !self.completion_enabled {
+                        self.completion_enabled = true;
+                    }
+                    self.completion.push(line.trim_start().to_string());
+                }
+            }
+        }
+
         // File .ghost must exist in the current path (zellij cwd dir is mounted as /host)
         // NOTE: /host is the cwd of where the zellij session started
         //       and not the current cwd of the pane itself
         let filename = "/host/.ghost".to_owned();
         if let Ok(lines) = read_lines(filename) {
             // Consumes the iterator, returns an (Optional) String
-            for line in lines {
-                if let Ok(cmd) = line {
-                    // ignore commented lines starting with '#'
-                    // or empty line
-                    if !cmd.trim_start().starts_with("#") && !cmd.trim_start().is_empty() {
-                        if !self.completion_enabled {
-                            self.completion_enabled = true;
-                        }
-                        self.completion.push(cmd);
+            for cmd in lines.flatten() {
+                // ignore commented lines starting with '#'
+                // or empty line
+                if !cmd.trim_start().starts_with('#') && !cmd.trim_start().is_empty() {
+                    if !self.completion_enabled {
+                        self.completion_enabled = true;
                     }
+                    self.completion.push(cmd);
                 }
             }
         }
@@ -374,11 +382,11 @@ impl ZellijPlugin for State {
 
     fn render(&mut self, rows: usize, cols: usize) {
         // get the shell args from config
-        if self.userspace_configuration.get("shell").is_none() {
-            if self.userspace_configuration.get("shell_flag").is_none() {
-                println!("{}", color_bold(RED, "Error 'shell' (zsh|fish|bash)  and 'shell_flag' (e.g '-ic') are required configuration"));
-                return;
-            }
+        if self.userspace_configuration.get("shell").is_none()
+            && self.userspace_configuration.get("shell_flag").is_none()
+        {
+            println!("{}", color_bold(RED, "Error 'shell' (zsh|fish|bash)  and 'shell_flag' (e.g '-ic') are required configuration"));
+            return;
         }
 
         let debug = self.userspace_configuration.get("debug");
@@ -390,7 +398,7 @@ impl ZellijPlugin for State {
         let res = self.check_valid_cmd();
         match res {
             Ok(_) => {
-                println!("");
+                println!();
             }
             Err(_) => println!("{}", color_bold(RED, "Invalid Command")),
         }
@@ -415,27 +423,27 @@ impl ZellijPlugin for State {
         if self.completion_enabled {
             if let Some(m) = &self.completion_match {
                 println!(" $ {}", m);
-                println!("");
+                println!();
 
                 count += 2;
             } else {
-                println!(" $ {}", "Matched command".dimmed().to_string());
-                println!("");
+                println!(" $ {}", "Matched command".dimmed());
+                println!();
                 count += 2;
             }
             println!(" Available completion: ");
 
             count += 1;
             for l in self.completion.iter() {
-                if let Some(_) = self.fz_matcher.fuzzy_match(l, &self.input) {
+                if self.fz_matcher.fuzzy_match(l, &self.input).is_some() {
                     // limits display of completion
                     // based on available rows in pane
                     // with arbitrary buffer for safety
                     if count >= rows - 4 {
-                        println!(" - {}", "...".dimmed().to_string());
+                        println!(" - {}", "...".dimmed());
                         break;
                     }
-                    println!(" - {}", l.dimmed().to_string());
+                    println!(" - {}", l.dimmed());
                     count += 1;
                 }
             }
@@ -443,7 +451,7 @@ impl ZellijPlugin for State {
 
         // current dir view
         if let Some(plugin_cwd) = self.userspace_configuration.get("cwd") {
-            println!("");
+            println!();
             println!(
                 " {}: {}",
                 color_bold(WHITE, "cwd"),
@@ -452,7 +460,7 @@ impl ZellijPlugin for State {
         }
 
         // Key binding view
-        println!("");
+        println!();
         println!(
             "  <{}> <{}> Close Plugin <{}> Toggle Completion on/off",
             color_bold(WHITE, "Esc"),
@@ -461,7 +469,7 @@ impl ZellijPlugin for State {
         );
 
         if debug.is_some_and(|x| x == "true") {
-            println!("input: {}", self.input.to_string());
+            println!("input: {}", self.input);
 
             println!("Cursor: {}", self.input_cusror_index);
             println!("len: {}", self.input.len());
