@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2024-04-20
+
+### Documentation
+
+- Fix typo
+
+### Features
+
+- Rename `cwd` to `exec_cwd` for zellij 0.40.0
+
+## [0.3.0] - 2023-11-07
+
+### Documentation
+
+- Changelog
+
+### Features
+
+- Add global_completion list from config
+
 ## [0.2.1] - 2023-09-09
 
 ### Features

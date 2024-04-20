@@ -185,7 +185,7 @@ shared_except "locked" {
     // using GhostLauncher "hack" to pass the cwd=$(pwd) as runtime config 
     bind "Alt )" {
          // NOTE: you can pass the global_completion as runtim config with the '\n' delimiter between commands
-         Run "bash" "-ic" "zellij  plugin --floating --configuration \"shell=zsh,shell_flag=-ic,cwd=$(pwd),ghost_launcher=GhostLauncher,debug=false,global_completion=tf apply -auto-approve \ncargo build \ngo test -v  ./...\" -- \"file:$HOME/.config/zellij/plugins/ghost.wasm\"" {
+         Run "bash" "-ic" "zellij  plugin --floating --configuration \"shell=zsh,shell_flag=-ic,exec_cwd=$(pwd),ghost_launcher=GhostLauncher,debug=false,global_completion=tf apply -auto-approve \ncargo build \ngo test -v  ./...\" -- \"file:$HOME/.config/zellij/plugins/ghost.wasm\"" {
             floating true
             name "GhostLauncher" // this must match ghost_launcher=GhostLauncher 
                                  // the plugin will automatically close the pane
