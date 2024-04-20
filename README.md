@@ -134,7 +134,7 @@ Verified OK
 
 | Key                                                | value                      | desctiption                                                |
 |----------------------------------------------------|----------------------------|------------------------------------------------------------|
-| ~~ `cwd` (**deprecate** use `exec_cwd` instead) ~~ | directory path             | set working dir for command                                |
+| ~~`cwd` (**deprecated** use `exec_cwd` instead)~~  | directory path             | set working dir for command                                |
 |  `exec_cwd` (zellij `0.40.0`)                      | directory path             | set working dir for command                                |
 | `embedded`                                         | `true`                     | created command panes are embedded instead of floating     |
 | `ghost_launcher`                                   | GhostLauncher pane name    | plugin will automatically close that pane                  |
