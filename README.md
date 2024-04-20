@@ -16,7 +16,7 @@ If the plugin finds a `.ghost` at the working dir of the plugin, it will add the
 
 ## Requirements
 
-Zellij version `v0.38.0` or later.
+Zellij version `v0.40.0` or later.
 
 ### Zellij Plugin Permission 
 
@@ -52,6 +52,15 @@ go test -v ./...
 
 ## Install
 
+### Upgrade
+
+#### Breaking Change
+
+##### v0.4.0
+
+* renamed config `cwd` with `exec_cwd`
+
+
 ### Download WASM Binary
 
 
@@ -72,9 +81,9 @@ Then you can use the `./verify_signature.sh` in this repo:
 ```
 for example
 ```bash
-$ ./verify_signature.sh ~/Downloads/ghost.wasm v0.1.0
+$ ./verify_signature.sh ~/Downloads/ghost.wasm v0.4.0
 
-Checking Signature for version: v0.1.0
+Checking Signature for version: v0.4.0
 Verified OK
 
 ```
@@ -123,13 +132,14 @@ Verified OK
 ### Optional Configuration
 
 
-| Key                 | value                      | desctiption                                                |
-|---------------------|----------------------------|------------------------------------------------------------|
-| `cwd`               | directory path             | set working dir for command                                |
-| `embedded`          | `true`                     | created command panes are embedded instead of floating     |
-| `ghost_launcher`    | GhostLauncher pane name    | plugin will automatically close that pane                  |
-| `debug`             | `true`                     | display debug info                                         |
-| `global_completion` | multine list of completion | global list of completion to inlude to `/host/.ghost` file |
+| Key                                                | value                      | desctiption                                                |
+|----------------------------------------------------|----------------------------|------------------------------------------------------------|
+| ~~ `cwd` (**deprecate** use `exec_cwd` instead) ~~ | directory path             | set working dir for command                                |
+|  `exec_cwd` (zellij `0.40.0`)                      | directory path             | set working dir for command                                |
+| `embedded`                                         | `true`                     | created command panes are embedded instead of floating     |
+| `ghost_launcher`                                   | GhostLauncher pane name    | plugin will automatically close that pane                  |
+| `debug`                                            | `true`                     | display debug info                                         |
+| `global_completion`                                | multine list of completion | global list of completion to inlude to `/host/.ghost` file |
 
 
 
@@ -137,12 +147,12 @@ Verified OK
 ## Launch Plugin
 
 ```bash
-zellij action launch-or-focus-plugin --floating --configuration "shell=zsh,shell_flag=-ic,cwd=$(pwd)" "file:$HOME/.config/zellij/plugins/ghost.wasm"
+zellij plugin --floating --configuration "shell=zsh,shell_flag=-ic,cwd=$(pwd)" -- "file:$HOME/.config/zellij/plugins/ghost.wasm"
 ```
 
 ## Config Keybindings
 
-> NOTE: The `LaunchOrFocusPlugin` keybing action does not allow to dynamically pass the cwd to the plugin. As a workaround, you can use the `Run` keybinding action to execute the `zellij action launch-or-focus-plugin` from a RunCommand pane where you can pass the plugin config `cwd=$(pwd)`. The cwd should be the same as the previously focused pane.
+> NOTE: The `LaunchOrFocusPlugin` keybing action does not allow to dynamically pass the cwd to the plugin. As a workaround, you can use the `Run` keybinding action to execute the `zellij plugin` from a RunCommand pane where you can pass the plugin config `exec_cwd=$(pwd)`. The cwd should be the same as the previously focused pane.
 
 ```kdl
 shared_except "locked" {
@@ -175,7 +185,7 @@ shared_except "locked" {
     // using GhostLauncher "hack" to pass the cwd=$(pwd) as runtime config 
     bind "Alt )" {
          // NOTE: you can pass the global_completion as runtim config with the '\n' delimiter between commands
-         Run "bash" "-ic" "zellij action launch-or-focus-plugin --floating --configuration \"shell=zsh,shell_flag=-ic,cwd=$(pwd),ghost_launcher=GhostLauncher,debug=false,global_competion=tf apply -auto-approve \ncargo build \ngo test -v  ./...\" \"file:$HOME/.config/zellij/plugins/ghost.wasm\"" {
+         Run "bash" "-ic" "zellij  plugin --floating --configuration \"shell=zsh,shell_flag=-ic,cwd=$(pwd),ghost_launcher=GhostLauncher,debug=false,global_completion=tf apply -auto-approve \ncargo build \ngo test -v  ./...\" -- \"file:$HOME/.config/zellij/plugins/ghost.wasm\"" {
             floating true
             name "GhostLauncher" // this must match ghost_launcher=GhostLauncher 
                                  // the plugin will automatically close the pane

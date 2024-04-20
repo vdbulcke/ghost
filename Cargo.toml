@@ -7,7 +7,9 @@ edition = "2021"
 
 [dependencies]
 ansi_term = "0.12.1"
-zellij-tile = "0.39.0"
+zellij-tile = "0.40.0"
+zellij-utils = "0.40.0"
+
 owo-colors = "3.5.0"
 shellwords = "1.0.0"
 fuzzy-matcher = "0.3.7"

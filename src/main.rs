@@ -1,14 +1,13 @@
 use ansi_term::{Colour::Fixed, Style};
+use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use owo_colors::OwoColorize;
 use shellwords::MismatchedQuotes;
-use zellij_tile::prelude::*;
-
-use fuzzy_matcher::skim::SkimMatcherV2;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
 use std::{collections::BTreeMap, path::PathBuf};
+use zellij_tile::prelude::*;
 // use sprintf::sprintf;
 
 struct State {
@@ -192,7 +191,7 @@ impl State {
     /// Create a RunCommand pane with input_cmd if valid
     fn run_command(&mut self, input_cmd: String) {
         // get working dir from config
-        let plugin_cwd = self.userspace_configuration.get("cwd");
+        let plugin_cwd = self.userspace_configuration.get("exec_cwd");
         let cwd = match plugin_cwd {
             Some(path) => {
                 let mut pb = PathBuf::new();
@@ -225,11 +224,14 @@ impl State {
                             cwd,
                         });
                     } else {
-                        open_command_pane_floating(CommandToRun {
-                            path: exec,
-                            args: zsh_args,
-                            cwd,
-                        });
+                        open_command_pane_floating(
+                            CommandToRun {
+                                path: exec,
+                                args: zsh_args,
+                                cwd,
+                            },
+                            None,
+                        );
                     }
                     if self.launcher_pane_id.is_some() {
                         close_terminal_pane(self.launcher_pane_id.unwrap());
@@ -295,7 +297,7 @@ impl ZellijPlugin for State {
         let filename = "/host/.ghost".to_owned();
         if let Ok(lines) = read_lines(filename) {
             // Consumes the iterator, returns an (Optional) String
-            for cmd in lines.flatten() {
+            for cmd in lines.map_while(Result::ok) {
                 // ignore commented lines starting with '#'
                 // or empty line
                 if !cmd.trim_start().starts_with('#') && !cmd.trim_start().is_empty() {
@@ -450,11 +452,11 @@ impl ZellijPlugin for State {
         }
 
         // current dir view
-        if let Some(plugin_cwd) = self.userspace_configuration.get("cwd") {
+        if let Some(plugin_cwd) = self.userspace_configuration.get("exec_cwd") {
             println!();
             println!(
                 " {}: {}",
-                color_bold(WHITE, "cwd"),
+                color_bold(WHITE, "exec_cwd"),
                 plugin_cwd.blue().bold()
             );
         }

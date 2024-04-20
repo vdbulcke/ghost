@@ -126,6 +126,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
+name = "async-attributes"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3203e79f4dd9bdda415ed03cf14dae5a2bf775c683a00f94e9cd1faf0f596e5"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "async-channel"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -218,6 +228,7 @@ version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62565bb4402e926b29953c785397c6dc0391b7b446e45008b0049eb43cec6f5d"
 dependencies = [
+ "async-attributes",
  "async-channel",
  "async-global-executor",
  "async-io",
@@ -1085,6 +1096,7 @@ dependencies = [
  "owo-colors",
  "shellwords",
  "zellij-tile",
+ "zellij-utils",
 ]
 
 [[package]]
@@ -3617,9 +3629,9 @@ dependencies = [
 
 [[package]]
 name = "zellij-tile"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eacfea6cb4aeae01ebecec27e5003daa51078a8812a402f462fb872dbeb150c4"
+checksum = "58471198b62771e4387ac00c072e9b1d8ebd87db2568bdb5fbb60dd99d8552bd"
 dependencies = [
  "clap",
  "serde",
@@ -3631,9 +3643,9 @@ dependencies = [
 
 [[package]]
 name = "zellij-utils"
-version = "0.39.0"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0f8bcd0ce51223b2124470e70bdbbaac17aa0281abcbb0defb2c41026e84f0e"
+checksum = "5289f6ff643db4f7f772f090cede454cd1be276a3a5654464c402094b625524f"
 dependencies = [
  "anyhow",
  "async-channel",
