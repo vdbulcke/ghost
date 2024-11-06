@@ -52,6 +52,61 @@ fn get_focused_tab(tab_infos: &Vec<TabInfo>) -> Option<usize> {
 }
 
 impl State {
+    fn handle_key_event(&mut self, key: KeyWithModifier) -> bool {
+        let mut should_render = true;
+        match key.bare_key {
+            BareKey::Enter => {
+                if self.completion_enabled {
+                    if let Some(cmd) = &self.completion_match {
+                        // run completion match
+                        self.run_command(cmd.to_owned());
+                    }
+                } else {
+                    // if completion disable run intput as command
+                    self.run_command(self.input.to_owned());
+                }
+            }
+            BareKey::Backspace => {
+                if self.remove_input_at_index() {
+                    // update fuzzy find result
+                    self.fuzzy_find_completion();
+                }
+                should_render = true;
+            }
+            BareKey::Left => {
+                if self.input_cusror_index > 0 {
+                    self.input_cusror_index -= 1;
+                }
+                should_render = true;
+            }
+            BareKey::Right => {
+                if self.input_cusror_index < self.input.len() {
+                    self.input_cusror_index += 1;
+                }
+                should_render = true;
+            }
+            BareKey::Esc => {
+                self.close();
+                should_render = true;
+            }
+            BareKey::Char('c') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
+                self.close();
+                should_render = true;
+            }
+            BareKey::Char('x') if key.has_modifiers(&[KeyModifier::Ctrl]) => {
+                self.completion_enabled = !self.completion_enabled;
+                should_render = true;
+            }
+            BareKey::Char(c) => {
+                if self.insert_input_at_index(c) {
+                    self.fuzzy_find_completion();
+                }
+                should_render = true;
+            }
+            _ => (),
+        }
+        should_render
+    }
     /// get the launcher pane by title or none
     fn get_ghost_launcher_pane(&self, pane_manifest: &PaneManifest) -> Option<u32> {
         let panes = pane_manifest.panes.get(&self.focused_tab_pos);
@@ -218,11 +273,14 @@ impl State {
                     // // e.g. "-ic"
                     let zsh_args = vec![shell_flag.to_owned(), input_cmd.to_owned()];
                     if self.embedded {
-                        open_command_pane(CommandToRun {
-                            path: exec,
-                            args: zsh_args,
-                            cwd,
-                        });
+                        open_command_pane(
+                            CommandToRun {
+                                path: exec,
+                                args: zsh_args,
+                                cwd,
+                            },
+                            BTreeMap::new(),
+                        );
                     } else {
                         open_command_pane_floating(
                             CommandToRun {
@@ -231,6 +289,7 @@ impl State {
                                 cwd,
                             },
                             None,
+                            BTreeMap::new(),
                         );
                     }
                     if self.launcher_pane_id.is_some() {
@@ -332,49 +391,8 @@ impl ZellijPlugin for State {
                 }
                 should_render = true;
             }
-            Event::Key(Key::Char('\n')) => {
-                if self.completion_enabled {
-                    if let Some(cmd) = &self.completion_match {
-                        // run completion match
-                        self.run_command(cmd.to_owned());
-                    }
-                } else {
-                    // if completion disable run intput as command
-                    self.run_command(self.input.to_owned());
-                }
-            }
-            Event::Key(Key::Backspace) => {
-                if self.remove_input_at_index() {
-                    // update fuzzy find result
-                    self.fuzzy_find_completion();
-                }
-                should_render = true;
-            }
-            Event::Key(Key::Char(c)) => {
-                if self.insert_input_at_index(c) {
-                    self.fuzzy_find_completion();
-                }
-                should_render = true;
-            }
-            Event::Key(Key::Left) => {
-                if self.input_cusror_index > 0 {
-                    self.input_cusror_index -= 1;
-                }
-                should_render = true;
-            }
-            Event::Key(Key::Right) => {
-                if self.input_cusror_index < self.input.len() {
-                    self.input_cusror_index += 1;
-                }
-                should_render = true;
-            }
-            Event::Key(Key::Esc | Key::Ctrl('c')) => {
-                self.close();
-                should_render = true;
-            }
-            Event::Key(Key::Ctrl('x')) => {
-                self.completion_enabled = !self.completion_enabled;
-                should_render = true;
+            Event::Key(key) => {
+                should_render = self.handle_key_event(key);
             }
             _ => (),
         };

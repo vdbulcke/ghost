@@ -18,6 +18,12 @@ If the plugin finds a `.ghost` at the working dir of the plugin, it will add the
 
 Zellij version `v0.40.0` or later.
 
+| Zellij    | ghost    |
+| --------- | -------- |
+| `v0.40.x` | `v0.4.0` |
+| `v0.41.1` | `v0.5.0` |
+
+
 ### Zellij Plugin Permission 
 
 | Permission               | Why                                 |
