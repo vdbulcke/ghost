@@ -9,12 +9,9 @@ use std::path::Path;
 use std::{collections::BTreeMap, path::PathBuf};
 use zellij_tile::prelude::*;
 // use sprintf::sprintf;
-
+#[derive(Default)]
 struct State {
-    focused_tab_pos: usize,
-    launcher_pane_name: String,
     embedded: bool,
-    launcher_pane_id: Option<u32>,
     input: String,
     input_cusror_index: usize,
     userspace_configuration: BTreeMap<String, String>,
@@ -22,33 +19,7 @@ struct State {
     completion: Vec<String>,
     completion_match: Option<String>,
     fz_matcher: SkimMatcherV2,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            launcher_pane_name: String::from("GhostLauncher"),
-            launcher_pane_id: None,
-            userspace_configuration: BTreeMap::default(),
-            focused_tab_pos: 0,
-            embedded: false,
-            input: String::default(),
-            input_cusror_index: 0,
-            completion_enabled: false,
-            completion: Vec::default(),
-            completion_match: None,
-            fz_matcher: SkimMatcherV2::default(),
-        }
-    }
-}
-/// get the focused tab position
-fn get_focused_tab(tab_infos: &Vec<TabInfo>) -> Option<usize> {
-    for t in tab_infos {
-        if t.active {
-            return Some(t.position);
-        }
-    }
-    None
+    current_cwd: Option<PathBuf>,
 }
 
 impl State {
@@ -107,24 +78,9 @@ impl State {
         }
         should_render
     }
-    /// get the launcher pane by title or none
-    fn get_ghost_launcher_pane(&self, pane_manifest: &PaneManifest) -> Option<u32> {
-        let panes = pane_manifest.panes.get(&self.focused_tab_pos);
-        if let Some(panes) = panes {
-            for pane in panes {
-                if !pane.is_plugin && pane.title == self.launcher_pane_name {
-                    return Some(pane.id);
-                }
-            }
-        }
-        None
-    }
 
     /// close current plugins and its hepler pane
     fn close(&self) {
-        if self.launcher_pane_id.is_some() {
-            close_terminal_pane(self.launcher_pane_id.unwrap());
-        }
         close_plugin_pane(get_plugin_ids().plugin_id);
     }
 
@@ -245,17 +201,7 @@ impl State {
 
     /// Create a RunCommand pane with input_cmd if valid
     fn run_command(&mut self, input_cmd: String) {
-        // get working dir from config
-        let plugin_cwd = self.userspace_configuration.get("exec_cwd");
-        let cwd = match plugin_cwd {
-            Some(path) => {
-                let mut pb = PathBuf::new();
-                pb.push(path);
-                Some(pb)
-            }
-            _ => None,
-        };
-
+        let cwd = self.current_cwd.clone();
         // parse command + params and validate shell compliant
         let command = match shellwords::split(&input_cmd) {
             Ok(cmd) => Some(cmd),
@@ -292,9 +238,7 @@ impl State {
                             BTreeMap::new(),
                         );
                     }
-                    if self.launcher_pane_id.is_some() {
-                        close_terminal_pane(self.launcher_pane_id.unwrap());
-                    }
+
                     self.input = String::default();
                     close_plugin_pane(get_plugin_ids().plugin_id);
                 }
@@ -308,11 +252,6 @@ register_plugin!(State);
 impl ZellijPlugin for State {
     fn load(&mut self, configuration: BTreeMap<String, String>) {
         self.userspace_configuration = configuration;
-
-        // override default launcher pane name if config exists
-        if let Some(spwaner_pane_name) = self.userspace_configuration.get("ghost_launcher") {
-            self.launcher_pane_name = spwaner_pane_name.clone();
-        }
 
         // use embedded pane instead of floating if config exists
         if let Some(embedded) = self.userspace_configuration.get("embedded") {
@@ -368,33 +307,17 @@ impl ZellijPlugin for State {
             }
         }
 
+        // get current cwd from plugin api
+        self.current_cwd = Some(get_plugin_ids().initial_cwd);
+
         rename_plugin_pane(get_plugin_ids().plugin_id, "Ghost");
     }
 
     fn update(&mut self, event: Event) -> bool {
         let mut should_render = false;
-        match event {
-            Event::TabUpdate(tab_info) => {
-                // keep track of focused to tab in order
-                // to find panes in active tab
-                if let Some(position) = get_focused_tab(&tab_info) {
-                    self.focused_tab_pos = position;
-                }
-                should_render = true;
-            }
-            Event::PaneUpdate(pane_manifest) => {
-                // keep track of pane id of the launcher pane
-                // in order to close it later
-                self.launcher_pane_id = self.get_ghost_launcher_pane(&pane_manifest);
-                if self.launcher_pane_id.is_some() {
-                    close_terminal_pane(self.launcher_pane_id.unwrap());
-                }
-                should_render = true;
-            }
-            Event::Key(key) => {
-                should_render = self.handle_key_event(key);
-            }
-            _ => (),
+
+        if let Event::Key(key) = event {
+            should_render = self.handle_key_event(key);
         };
 
         should_render
@@ -402,8 +325,8 @@ impl ZellijPlugin for State {
 
     fn render(&mut self, rows: usize, cols: usize) {
         // get the shell args from config
-        if self.userspace_configuration.get("shell").is_none()
-            && self.userspace_configuration.get("shell_flag").is_none()
+        if !self.userspace_configuration.contains_key("shell")
+            && !self.userspace_configuration.contains_key("shell_flag")
         {
             println!("{}", color_bold(RED, "Error 'shell' (zsh|fish|bash)  and 'shell_flag' (e.g '-ic') are required configuration"));
             return;
