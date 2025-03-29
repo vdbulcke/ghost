@@ -30,7 +30,7 @@ jobs:
           toolchain: stable      
 
       - name: Add WASM target
-        run: rustup target add wasm32-wasi
+        run: rustup target add wasm32-wasip1
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@main
@@ -40,7 +40,7 @@ jobs:
 
 
       - name: Sign binary
-        run: cosign sign-blob --oidc-issuer=https://token.actions.githubusercontent.com --output-certificate=cosign_cert.pem --output-signature=cosign.sig target/wasm32-wasi/release/ghost.wasm
+        run: cosign sign-blob --oidc-issuer=https://token.actions.githubusercontent.com --output-certificate=cosign_cert.pem --output-signature=cosign.sig target/wasm32-wasip1/release/ghost.wasm
         env:
           ## Cosign ENV Vars
           COSIGN_EXPERIMENTAL: 1
@@ -51,6 +51,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            target/wasm32-wasi/release/ghost.wasm
+            target/wasm32-wasip1/release/ghost.wasm
             cosign.sig
             cosign_cert.pem
