@@ -290,8 +290,7 @@ impl ZellijPlugin for State {
         }
 
         // File .ghost must exist in the current path (zellij cwd dir is mounted as /host)
-        // NOTE: /host is the cwd of where the zellij session started
-        //       and not the current cwd of the pane itself
+        // NOTE: the cwd of the last focused terminal, or the folder where Zellij was started if that's not available
         let filename = "/host/.ghost".to_owned();
         if let Ok(lines) = read_lines(filename) {
             // Consumes the iterator, returns an (Optional) String
