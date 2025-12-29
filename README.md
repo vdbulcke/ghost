@@ -9,10 +9,13 @@ Basically, it is an interactive version of `zrf` (`function zrf () { zellij run 
 
 Since `v0.3.0`, if you define a list of completions from `global_completion` plugin configuration, it will load each lines as a list of commands that you can fuzzy search (using [fuzzy-matcher](https://crates.io/crates/fuzzy-matcher)).
 
-If the plugin finds a `.ghost` at the working dir of the plugin, it will add the working dir completions with the global_completions.
+Since `v0.6.1`, if you have the option to cache last used `.ghost` file.
+
+If the plugin finds a `.ghost` at the current Zellij session's working directory, it will add those completions along with the global_completions.
 
 ![Completion](./img/fuzzy_search.png)
 
+> NOTE: When autocomplete is toggled off with <kbd>Ctrl</kbd>+<kbd>x</kbd> in the floating pane, you can run any command to run in the cwd in the floating pane instead of fuzzy find commands.
 
 ## Requirements
 
@@ -24,21 +27,19 @@ Zellij version `v0.40.0` or later.
 | `v0.41.1` | `v0.5.0` |
 
 
-### Zellij Plugin Permission 
+### Zellij Plugin Permission
 
 | Permission               | Why                                 |
 | -------------------------|-------------------------------------|
 | `ReadApplicationState`   | Subscribe to Pane and tab events    |
-| `RunCommands`            | Creating Run Command floating pane  | 
+| `RunCommands`            | Creating Run Command floating pane  |
 | `ChangeApplicationState` | Setting plugin pane name            |
 
 ### Host Filesystem Access
 
-> NOTE: zellij `v0.39.0` changed the `/host` path on plugin from the current zellij session working dir to the previous pane working dir (see [Release Notes](https://github.com/zellij-org/zellij/releases/tag/v0.39.0) for more info)
+> NOTE: zellij `v0.39.0` changed the `/host` path on plugin from the current zellij session working dir to the previous pane working dir (see [Release Notes](https://github.com/zellij-org/zellij/releases/tag/v0.39.0) and [related docs](https://zellij.dev/documentation/plugin-api-file-system) for more info)
 
-[Zellij maps the folder where Zellij was started](https://zellij.dev/documentation/plugin-api-file-system) to `/host` path on the plugin.
-
-The plugin will look for a `/host/.ghost` file (i.e. the current working of the previous focussed pane) to load a list of predefined commands (like a bash_history).
+The plugin will look for a `/host/.ghost` file (i.e. the current working of the previous focussed pane) to load a list of predefined commands (like a bash_history). Additionally, if cache is enabled, it will save a copy of the `.ghost` file in the `/tmp` folder.
 
 
 Example of a `.ghost` file:
@@ -55,7 +56,6 @@ go test -v ./...
 
 ```
 
-
 ## Install
 
 ### Upgrade
@@ -64,7 +64,9 @@ go test -v ./...
 
 ##### v0.4.0
 
-* renamed config `cwd` with `exec_cwd`
+~~* renamed config `cwd` with `exec_cwd`~~
+
+`cwd` and `exec_cwd` are deprecated since `0.6.0` along with `ghost_launcher`.
 
 
 ### Download WASM Binary
@@ -72,7 +74,7 @@ go test -v ./...
 
 * Download `ghost.wasm` binary from [release page](https://github.com/vdbulcke/ghost/releases).
 * Verify binary signature with cosign (see instruction bellow)
-* copy binary to zellij plugin dir: 
+* copy binary to zellij plugin directory:
      - `mv target/wasm32-wasip1/release/ghost.wasm ~/.config/zellij/plugins/`
 
 
@@ -80,7 +82,7 @@ go test -v ./...
 
 Make sure you have `cosign` installed locally (see [Cosign Install](https://docs.sigstore.dev/cosign/installation/)).
 
-Then you can use the `./verify_signature.sh` in this repo: 
+Then you can use the `./verify_signature.sh` in this repo:
 
 ```bash
 ./verify_signature.sh PATH_TO_DOWNLOADED_ARCHIVE TAG_VERSION
@@ -93,10 +95,6 @@ Checking Signature for version: v0.4.0
 Verified OK
 
 ```
-
-
-
-
 
 ### Build from source
 
@@ -138,13 +136,14 @@ Verified OK
 ### Optional Configuration
 
 
-| Key                                                       | value                      | desctiption                                                |
+| Key                                                       | value                      | description                                                |
 |-----------------------------------------------------------|----------------------------|------------------------------------------------------------|
 | ~~`cwd` (**deprecated** use `exec_cwd` instead)~~         | directory path             | set working dir for command                                |
 | ~~`exec_cwd` (zellij `0.40.0`)~~ (deprecated in `v0.6.0`) | directory path             | set working dir for command                                |
 | ~~`ghost_launcher`~~ (deprecated in `v0.6.0`)             | GhostLauncher pane name    | plugin will automatically close that pane                  |
-| `embedded`                                                | `true`                     | created command panes are embedded instead of floating     |
-| `debug`                                                   | `true`                     | display debug info                                         |
+| `embedded`                                                | `false`                    | created command panes are embedded instead of floating     |
+| `debug`                                                   | `false`                    | display debug info                                         |
+| `cache`                                                   | `false`                    | cache last used ghost file (valid only till zellij is open)|
 | `global_completion`                                       | multine list of completion | global list of completion to inlude to `/host/.ghost` file |
 
 
@@ -158,8 +157,6 @@ zellij plugin --floating --configuration "shell=zsh,shell_flag=-ic,cwd=$(pwd)" -
 
 ## Config Keybindings
 
-
-
 ```kdl
 shared_except "locked" {
 
@@ -168,7 +165,7 @@ shared_except "locked" {
         LaunchOrFocusPlugin "file:~/.config/zellij/plugins/ghost.wasm" {
             floating true
 
-            // Ghost config 
+            // Ghost config
             shell "zsh"      // required ("bash", "fish", "zsh")
             shell_flag "-ic" // required ("-ic",  "-c",    "-ic")
 
@@ -176,6 +173,7 @@ shared_except "locked" {
             // ghost_launcher "GhostLauncher" // name of the Ghost launcher pane (default GhostLauncher)
             // debug false                    // display debug info, config, parse command etc
             // embedded false                 // spawned command pane will be embedded instead of floating pane
+            // cache false                    // cache last used .ghost file to /tmp
 
 
             // NOTE: using 'r#"' and '"#' rust like multi string delimeter
@@ -183,7 +181,7 @@ shared_except "locked" {
                 tf apply -auto-approve
                 cargo build
                 go test -v  ./...
-                
+
             "#
         }
     }
@@ -194,13 +192,13 @@ shared_except "locked" {
 
 ## Limitations
 
-### resizing
+### Resizing
 
-UI column size is not handled, so resizing to plugin window too small may crash the plugin. 
-UI row size is partiallt handled, where it will minimize to a simple prompt if the plugin window becomes too small.
+- UI column size is not handled, so resizing to plugin window too small may crash the plugin.
+- UI row size is partially handled, where it will minimize to a simple prompt if the plugin window becomes too small.
 
 
 ## Note
 
 This my first rust project, so the code might not be the most idiomatic rust.
-Inpiration was taken from other [zellij plugins](https://zellij.dev/documentation/plugin-examples).
+Inspiration was taken from other [zellij plugins](https://zellij.dev/documentation/plugin-examples).
