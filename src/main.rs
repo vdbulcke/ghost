@@ -3,7 +3,8 @@ use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use owo_colors::OwoColorize;
 use shellwords::MismatchedQuotes;
-use std::fs::File;
+use std::io::Read;
+use std::fs::{self, File};
 use std::io::{self, BufRead};
 use std::path::Path;
 use std::{collections::BTreeMap, path::PathBuf};
@@ -12,6 +13,7 @@ use zellij_tile::prelude::*;
 #[derive(Default)]
 struct State {
     embedded: bool,
+    cache: bool,
     input: String,
     input_cusror_index: usize,
     userspace_configuration: BTreeMap<String, String>,
@@ -260,6 +262,12 @@ impl ZellijPlugin for State {
             }
         }
 
+        if let Some(cache) = self.userspace_configuration.get("cache") {
+            if cache == "true" {
+                self.cache = true;
+            }
+        }
+
         // Permission
         // - ReadApplicationState => for Tab and Pane update
         // - RunCommands => to run floating command terminal
@@ -302,6 +310,36 @@ impl ZellijPlugin for State {
                         self.completion_enabled = true;
                     }
                     self.completion.push(cmd);
+                }
+            }
+        } else if self.cache {
+            // Read from cache if it exists
+            let filename = "/tmp/.ghost".to_owned();
+            if let Ok(lines) = read_lines(filename) {
+                // Consumes the iterator, returns an (Optional) String
+                for cmd in lines.map_while(Result::ok) {
+                    // ignore commented lines starting with '#'
+                    // or empty line
+                    if !cmd.trim_start().starts_with('#') && !cmd.trim_start().is_empty() && !self.completion.contains(&cmd){
+                        if !self.completion_enabled {
+                            self.completion_enabled = true;
+                        }
+                        self.completion.push(cmd);
+                    }
+                }
+            }
+        }
+
+        if self.cache {
+            let source = Path::new("/host/.ghost");
+            let dest = "/tmp/.ghost";
+
+            if source.exists() {
+                if let Ok(mut file) = File::open(source) {
+                    let mut contents = Vec::new();
+                    if file.read_to_end(&mut contents).is_ok() {
+                        fs::write(dest, contents).expect("Write to /tmp failed");
+                    }
                 }
             }
         }
