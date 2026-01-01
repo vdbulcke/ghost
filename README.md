@@ -31,6 +31,7 @@ Zellij version `v0.40.0` or later.
 | `ReadApplicationState`   | Subscribe to Pane and tab events    |
 | `RunCommands`            | Creating Run Command floating pane  | 
 | `ChangeApplicationState` | Setting plugin pane name            |
+| `FullHdAccess`           | Read global config file             |
 
 ### Host Filesystem Access
 
@@ -138,14 +139,15 @@ Verified OK
 ### Optional Configuration
 
 
-| Key                                                       | value                      | desctiption                                                |
-|-----------------------------------------------------------|----------------------------|------------------------------------------------------------|
-| ~~`cwd` (**deprecated** use `exec_cwd` instead)~~         | directory path             | set working dir for command                                |
-| ~~`exec_cwd` (zellij `0.40.0`)~~ (deprecated in `v0.6.0`) | directory path             | set working dir for command                                |
-| ~~`ghost_launcher`~~ (deprecated in `v0.6.0`)             | GhostLauncher pane name    | plugin will automatically close that pane                  |
-| `embedded`                                                | `true`                     | created command panes are embedded instead of floating     |
-| `debug`                                                   | `true`                     | display debug info                                         |
-| `global_completion`                                       | multine list of completion | global list of completion to inlude to `/host/.ghost` file |
+| Key                                                       | value                               | desctiption                                                     |
+|-----------------------------------------------------------|-------------------------------------|-----------------------------------------------------------------|
+| ~~`cwd` (**deprecated** use `exec_cwd` instead)~~         | directory path                      | set working dir for command                                     |
+| ~~`exec_cwd` (zellij `0.40.0`)~~ (deprecated in `v0.6.0`) | directory path                      | set working dir for command                                     |
+| ~~`ghost_launcher`~~ (deprecated in `v0.6.0`)             | GhostLauncher pane name             | plugin will automatically close that pane                       |
+| `embedded`                                                | `true`                              | created command panes are embedded instead of floating          |
+| `debug`                                                   | `true`                              | display debug info                                              |
+| `global_completion`                                       | multine list of completion          | global list of completions to inlude to `/host/.ghost` file     |
+| `plugin_config_dir`                                       | absolute path to ghost plugin dir   | the dir must contain a `.ghost_global` with global completions  |
 
 
 > NOTE:  The "GhostLauncher" (`ghost_launcher`, `exec_cwd`) is no longer need. Now the `cwd` is derived from the `get_plugin_ids().initial_cwd` plugin api.

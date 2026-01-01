@@ -20,6 +20,10 @@ struct State {
     completion_match: Option<String>,
     fz_matcher: SkimMatcherV2,
     current_cwd: Option<PathBuf>,
+    plugin_config_dir: Option<PathBuf>,
+    changed_folder: bool,
+    has_read_global_file: bool,
+    has_failed_to_read_host_folder: bool,
 }
 
 impl State {
@@ -245,6 +249,41 @@ impl State {
             }
         }
     }
+
+    fn read_global_ghost_file(&mut self) {
+        if self.has_read_global_file || !self.changed_folder {
+            return;
+        }
+
+        let filename = "/host/.ghost_global".to_owned();
+        if let Ok(lines) = read_lines(filename) {
+            self.has_read_global_file = true;
+            // Consumes the iterator, returns an (Optional) String
+            for cmd in lines.map_while(Result::ok) {
+                // ignore commented lines starting with '#'
+                // or empty line
+                if !cmd.trim_start().starts_with('#') && !cmd.trim_start().is_empty() {
+                    if !self.completion_enabled {
+                        self.completion_enabled = true;
+                    }
+                    self.completion.push(cmd);
+                }
+            }
+        }
+    }
+
+    fn change_host_folder(&mut self) {
+        if self.changed_folder {
+            return;
+        }
+        // switch /host dir to plugin_config_dir to
+        // read the global ghost file
+        // NOTE: this required FullHdAccess
+        if let Some(new_host_folter) = &self.plugin_config_dir {
+            change_host_folder(new_host_folter.to_path_buf());
+            self.changed_folder = true;
+        }
+    }
 }
 
 register_plugin!(State);
@@ -264,16 +303,20 @@ impl ZellijPlugin for State {
         // - ReadApplicationState => for Tab and Pane update
         // - RunCommands => to run floating command terminal
         // - ChangeApplicationState => rename plugin pane, close managed paned
+        // - FullHdAccess => required to read global plugin config file
         request_permission(&[
             PermissionType::ReadApplicationState,
             PermissionType::RunCommands,
             PermissionType::ChangeApplicationState,
+            PermissionType::FullHdAccess,
         ]);
         subscribe(&[
             EventType::ModeUpdate,
             EventType::TabUpdate,
             EventType::PaneUpdate,
             EventType::Key,
+            EventType::HostFolderChanged,
+            EventType::FailedToChangeHostFolder,
         ]);
 
         if let Some(global_completions) = self.userspace_configuration.get("global_completion") {
@@ -310,20 +353,46 @@ impl ZellijPlugin for State {
         // get current cwd from plugin api
         self.current_cwd = Some(get_plugin_ids().initial_cwd);
 
+        if let Some(plugin_config_dir) = self.userspace_configuration.get("plugin_config_dir") {
+            self.plugin_config_dir = Some(PathBuf::from(plugin_config_dir));
+            // WARN: for some reason calling change_host_folder() here
+            // does have any effect... This is why the change host folder is
+            // done in the render function
+        }
+
         rename_plugin_pane(get_plugin_ids().plugin_id, "Ghost");
     }
 
     fn update(&mut self, event: Event) -> bool {
-        let mut should_render = false;
+        let should_render;
 
-        if let Event::Key(key) = event {
-            should_render = self.handle_key_event(key);
-        };
+        match event {
+            Event::Key(key) => {
+                should_render = self.handle_key_event(key);
+            }
+            Event::HostFolderChanged(_) => {
+                self.changed_folder = true;
+                self.read_global_ghost_file();
+                should_render = true;
+            }
+            Event::FailedToChangeHostFolder(_) => {
+                self.has_failed_to_read_host_folder = true;
+                should_render = true;
+            }
+            _ => {
+                should_render = false;
+            }
+        }
 
         should_render
     }
 
     fn render(&mut self, rows: usize, cols: usize) {
+        // call to the change_host_folder is not immediate
+        // we need to wait for HostFolderChanged or FailedToChangeHostFolder
+        // event in update function
+        self.change_host_folder();
+
         // get the shell args from config
         if !self.userspace_configuration.contains_key("shell")
             && !self.userspace_configuration.contains_key("shell_flag")
@@ -411,11 +480,27 @@ impl ZellijPlugin for State {
             color_bold(WHITE, "Ctrl x"),
         );
 
+        if self.has_failed_to_read_host_folder {
+            println!();
+            println!(
+                "{} - {:#?}",
+                color_bold(RED, "failed to change host folder"),
+                self.userspace_configuration
+                    .get("plugin_config_dir")
+                    .unwrap_or(&"None".to_owned()),
+            );
+            println!();
+        }
+
         if debug.is_some_and(|x| x == "true") {
             println!("input: {}", self.input);
 
             println!("Cursor: {}", self.input_cusror_index);
             println!("len: {}", self.input.len());
+
+            println!("/host/.ghost: {}", Path::new("/host/.ghost").exists());
+            println!("/host/ghost: {}", Path::new("/host/ghost").exists());
+            println!("changed_folder: {}", self.changed_folder);
 
             println!(
                 "{} {:#?}",
